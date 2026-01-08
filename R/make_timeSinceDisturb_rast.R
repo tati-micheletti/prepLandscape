@@ -3,7 +3,7 @@
 #' @author Julie W. Turner
 #'
 #'
-make_timeSinceDisturb_rast <- function(layer, rast, disturbanceType, minyr = NULL, maxyr = NULL, backgrndYear = NULL, backgrndTS = NULL, where2save = NULL){
+make_timeSinceDisturb_rast <- function(layer, rast, disturbanceType, minyr = NULL, maxyr = NULL, backgrndYear = NULL, backgrndTS = NULL, where2save = NULL, ...){
 
   lyr <- layer
   raster <- rast

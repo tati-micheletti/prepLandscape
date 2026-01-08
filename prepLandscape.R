@@ -43,11 +43,11 @@ defineModule(sim, list(
                     "URL for NBAC (National Burn Area Composite) fire database"),
     defineParameter("nfdbURL", "character", 'https://cwfis.cfs.nrcan.gc.ca/downloads/nfdb/fire_poly/current_version/NFDB_poly.zip', NA, NA,
                     "URL for National Fire Data Base (NFDB) for back filling NBAC"),
-    defineParameter("rtmFuns", "character", c(paste0('make_landforest_prop(targetFile = targetFile, trast = rtm, buff = ',
-                                                     sim$buffer,', where2save = NULL)')), NA, NA,
+    defineParameter("rtmFuns", "character", 
+                    paste0("make_landforest_prop(targetFile = targetFile, trast = rtm, buff = buff, where2save = NULL)"), 
+                    NA, NA,
                     paste0("List functions to apply to rasters for moving windows or not.",
-                           " Currently only applies to landcover")) #TODO Either a list or not...
-    
+                           " Currently only applies to landcover"))
   ),
   inputObjects = bindrows(
     expectsInput(objectName = 'studyArea', objectClass = 'SpatVector',
@@ -132,97 +132,130 @@ doEvent.prepLandscape = function(sim, eventTime, eventType) {
         sim$studyArea_extendedLandscape <- terra::buffer(sim$studyArea, 50000) |>
           Cache(.functionName = 'prep_studyArea_extendedLandscape')
       }
+      # Here we digest studyArea_extendedLandscape, which is used below
+      hashSA_Land <- digest::digest(sim$studyArea_extendedLandscape)
       
       if (is.null(sim$harvNTEMS)){
-        message("Creating harvNTEMS...")
-        sim$harvNTEMS <- reproducible::prepInputs(url = extractURL("harvNTEMS"),
-                                                  destinationPath = dPath,
-                                                  to = sim$studyArea_extendedLandscape,
-                                                  fun = 'terra::rast',
-                                                  method = 'near') |>
-          Cache(.functionName = 'prepInputs_harvNTEMS')
+        sim$harvNTEMS <- createHarvNTEMS(harvNTEMSurl = extractURL("harvNTEMS"),
+                                         studyArea_extendedLandscape = sim$studyArea_extendedLandscape,
+                                         dPath = dPath, 
+                                         hashSA_Land = hashSA_Land)
       }
       
       if (is.null(sim$rasterToMatch_extendedLandscapeFine)){
-        message("Creating rasterToMatch_extendedLandscapeFine...")
-        sim$rasterToMatch_extendedLandscapeFine <- terra::rasterize(sim$studyArea_extendedLandscape,
-                                                                    sim$harvNTEMS, vals = 1)
-        sim$rasterToMatch_extendedLandscapeFine <- terra::mask(sim$rasterToMatch_extendedLandscapeFine,
-                                                               sim$studyArea_extendedLandscape)|>
-          Cache(.functionName = 'prep_rasterToMatch_extendedLandscapeFine')
+        sim$rasterToMatch_extendedLandscapeFine <- createFineRTM(studyArea_extendedLandscape = 
+                                                                   sim$studyArea_extendedLandscape,
+                                                                 RTM = sim$harvNTEMS)
       }
-      mod$dig <- reproducible::CacheDigest(sim$rasterToMatch_extendedLandscapeFine)$outputHash
+      # Here we digest rasterToMatch_extendedLandscapeFine, which is used widely below
+      hashRTM_LandFine <- digest::digest(sim$rasterToMatch_extendedLandscapeFine)
       
       if (is.null(sim$rasterToMatch_extendedLandscape)){
-        message("Creating rasterToMatch_extendedLandscape...")
-        sim$rasterToMatch_extendedLandscape <- terra::aggregate(sim$rasterToMatch_extendedLandscapeFine,
-                                                                fact = 8)|>
-          Cache(.cacheExtra = mod$dig, omitArgs = 'x', .functionName = 'prep_rasterToMatch_extendedLandscape')
+        sim$rasterToMatch_extendedLandscape <- createExtendedRTM(rasterToMatch_extendedLandscapeFine =
+                                                                   sim$rasterToMatch_extendedLandscapeFine,
+                                                                 hashRTM_LandFine = hashRTM_LandFine)
       }
       
-      mod$dig <- c(mod$dig, reproducible::CacheDigest(sim$rasterToMatch_extendedLandscape)$outputHash)
-      
       if (is.null(sim$rasterToMatch_extendedLandscapeCoarse)){
-        message("Creating rasterToMatch_extendedLandscapeCoarse...")
-        sim$rasterToMatch_extendedLandscapeCoarse <- terra::aggregate(sim$rasterToMatch_extendedLandscapeFine,
-                                                                      fact = 16)|>
-          Cache(.cacheExtra = mod$dig, omitArgs = 'x', .functionName = 'prep_rasterToMatch_extendedLandscapeCoarse')
+        sim$rasterToMatch_extendedLandscapeCoarse <- createCoarseRTM(rasterToMatch_extendedLandscapeFine =
+                                                                       sim$rasterToMatch_extendedLandscapeFine,
+                                                                     hashRTM_LandFine = hashRTM_LandFine)
       }
       
       if (is.null(sim$rtms)){
         message("Creating rtms...")
         sim$rtms <- list(sim$rasterToMatch_extendedLandscape)
         names(sim$rtms) <- c('window240')
-        mod$dig <- c(mod$dig, reproducible::CacheDigest(names(sim$rtms))$outputHash)
       }
       
       if (is.null(sim$buffer)){
         sim$buffer <- 720
       }
-      
+
       if (is.null(sim$disturbCanLadOldType)){
-        message("Creating disturbCanLadOldType...")
-        sim$disturbCanLadOldType <- reproducible::prepInputs(url = extractURL('disturbCanLadOldType'),
-                                                             destinationPath = dPath,
-                                                             alsoExtract = "similar", fun = "terra::rast",
-                                                             to = sim$rasterToMatch_extendedLandscapeFine,
-                                                             method = 'near') |>
-          Cache(.cacheExtra = mod$dig, omitArgs = 'to', .functionName = 'load_disturbCanLadOldType')
+        sim$disturbCanLadOldType <- Cache(createDisturbCanLadOldType, 
+                                   disturbCanLadOldTypeURL = extractURL('disturbCanLadOldType'),
+                                   rasterToMatch_extendedLandscapeFine = 
+                                     sim$rasterToMatch_extendedLandscapeFine,
+                                   hashRTM_LandFine = hashRTM_LandFine, 
+                                   dPath = dPath,
+                                   omitArgs = 'rasterToMatch_extendedLandscapeFine', 
+                                   .functionName = 'load_disturbCanLadOldType_Outter')
       }
       
       if (is.null(sim$disturbCanLadOldYear)){
-        message("Creating disturbCanLadOldYear...")
-        sim$disturbCanLadOldYear <- reproducible::prepInputs(url = extractURL('disturbCanLadOldYear'),
-                                                             destinationPath = dPath,
-                                                             alsoExtract = "similar", fun = "terra::rast",
-                                                             to = sim$rasterToMatch_extendedLandscapeFine,
-                                                             method = 'near') |>
-          Cache(.cacheExtra = mod$dig, omitArgs = 'to', .functionName = 'load_disturbCanLadOldYear')
+        sim$disturbCanLadOldYear <- Cache(createdisturbCanLadOldYear, 
+          disturbCanLadOldYearURL = extractURL('disturbCanLadOldYear'),
+          rasterToMatch_extendedLandscapeFine = 
+            sim$rasterToMatch_extendedLandscapeFine,
+          hashRTM_LandFine = hashRTM_LandFine, 
+          dPath = dPath,
+          omitArgs = 'rasterToMatch_extendedLandscapeFine',
+          .functionName = 'load_disturbCanLadOldYear_Outter')
       }
-      
+
       if (is.null(sim$fires)){
-        message("Creating fires...")
-        sim$fires <- combine_fire_DB(P(sim)$nbacURL, P(sim)$nfdbURL, dPath,
-                                     sim$studyArea_extendedLandscape,
-                                     studyAreaName = Par$.studyAreaName,
-                                     savePath = NULL) |>
-          Cache(.cacheExtra = mod$dig, omitArgs = 'studyArea', .functionName = 'combine_fire_DB')
+        sim$fires <- createFires(hashSA_Land = hashSA_Land,
+                                 nbacURL = P(sim)$nbacURL,
+                                 nfdbURL = P(sim)$nfdbURL,
+                                 dPath = dPath,
+                                 studyArea_extendedLandscape = sim$studyArea_extendedLandscape)
       }
       
       if (is.null(sim$anthroDisturb)){
-        message("Creating anthropogenic disturbance layers...")
-        sim$anthroDisturb <- prep_anthroDisturbance(inputsPath = dPath, studyArea = sim$studyArea_extendedLandscape,
-                                                    dataPath = dataPath(sim), source = 'ECCC') |>
-          Cache(.cacheExtra = mod$dig, omitArgs = c('studyArea', 'inputsPath', 'dataPath'), 
-                .functionName = 'prep_anthroDisturbance', useCloud = TRUE)
+        sim$anthroDisturb <- createAnthroDisturbance(dPath = dPath, 
+                                                     dataPath = dataPath(sim), 
+                                                     studyArea_extendedLandscape = 
+                                                       sim$studyArea_extendedLandscape, 
+                                                     hashSA_Land = hashSA_Land)
       }
-      
-      sim$landscapeYearly <- prep_everything(Par$histLandYears, sim$fires, sim$rasterToMatch_extendedLandscape,
-                                         sim$rtms, sim$rtmFuns, Par$backgroundYr,
-                                         sim$harvNTEMS, sim$disturbCanLadOldYear, sim$disturbCanLadOldType, mod$dig, dPath)|>
-        Cache(.functionName = 'prep_yearly', .cacheExtra = mod$dig, omitArgs = c('rasterToMatch', 'rtms'), useCloud = TRUE)
+      message("Digest: rasterToMatch")
+      hashRTM_Land <- digest::digest(sim$rasterToMatch)
+      message("Digest: fires")
+      hashfires <- digest::digest(sim$fires)
+      message("Digest: harvNTEMS")
+      hashHarvNTEMS <- digest::digest(sim$harvNTEMS)
+      message("Digest: disturbCanLadOldYear")
+      hashDisturbCanLadOldYear <- digest::digest(sim$disturbCanLadOldYear)
+      message("Digest: disturbCanLadOldType")
+      hashDisturbCanLadOldType <- digest::digest(sim$disturbCanLadOldType)
+
+      sim$landscapeYearly <- prep_everything(# Small Inputs 
+                                             histLandYears = Par$histLandYears, 
+                                             backgroundYr = Par$backgroundYr,
+                                             rtmFuns = Par$rtmFuns,
+                                             bufferRTM = sim$buffer,
+                                             dPath = dPath,
+                                             # Large inputs (should be omitted)
+                                             fires = sim$fires, 
+                                             rasterToMatch = sim$rasterToMatch_extendedLandscape,
+                                             rtms = sim$rtms,
+                                             harvNTEMS = sim$harvNTEMS, 
+                                             disturbCanLadOldYear = sim$disturbCanLadOldYear,
+                                             disturbCanLadOldType = sim$disturbCanLadOldType, 
+                                             # Hashes
+                                             hashRTM_Land = hashRTM_Land,
+                                             hashfires = hashfires,
+                                             hashHarvNTEMS = hashHarvNTEMS,
+                                             hashDisturbCanLadOldYear = hashDisturbCanLadOldYear,
+                                             hashDisturbCanLadOldType = hashDisturbCanLadOldType)
+      # |> Cache(.functionName = 'prep_yearly', 
+      #         omitArgs = c('rasterToMatch', 'rtms', "fires", "harvNTEMS", 
+      #                      "disturbCanLadOldYear", "disturbCanLadOldType"))
+      #                      FOR SOME REASON NOT WORKING, ERROR ON path?!
 
       sim$landscape5Yearly <- sim$anthroDisturb
+      
+      # print("SAVE OUTPUTS!")
+      # writeRaster(x = sim$landscapeYearly[[1]], 
+      #             filename = file.path(outputPath(sim), "Covariates/harvNTEMS.tif"))
+      # 
+      # lapply(names(sim$landscapeYearly[[2]][[1]]), function(RAS){
+      #   writeRaster(x = sim$landscapeYearly[[2]][[1]][[RAS]], 
+      #               filename = file.path(outputPath(sim), paste0("Covariates/", RAS, ".tif")))
+      #   print(paste0("SAVED: ", RAS))
+      # })
+      
     },
 
     warning(noEventWarning(sim))

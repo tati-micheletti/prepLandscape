@@ -3,7 +3,9 @@
 #' @author Julie W. Turner
 
 
-prep_anthroDisturbance <- function(inputsPath, studyArea, dataPath, source = 'ECCC', studyAreaName = NULL) {
+prep_anthroDisturbance <- function(inputsPath, studyArea, 
+                                   dataPath, source = 'ECCC', 
+                                   studyAreaName = NULL, ...) {
   ### ECCC disturbance ----
   if(source == 'ECCC'){
     eccc_lines_2010 <- reproducible::prepInputs(url = 'https://drive.google.com/file/d/1kgIUXuseEfiyv8tEWnAlWdRZkeIhQrwa/view?usp=share_link',
@@ -93,8 +95,6 @@ prep_anthroDisturbance <- function(inputsPath, studyArea, dataPath, source = 'EC
     #summary(as.factor(eccc_polys_2020$Class))
     disturb_2020 <- subset(eccc_polys_2020, !(eccc_polys_2020$Class %in% c('Cutblock', 'Harvest')))
 
-
-
     dist.mask.2015 <- terra::mask(disturb_2010, disturb_2015, inverse = T)
     disturb_2015_merge <- terra::union(disturb_2015, dist.mask.2015)
 
@@ -112,15 +112,15 @@ prep_anthroDisturbance <- function(inputsPath, studyArea, dataPath, source = 'EC
     names(disturbances2020) <- c('paved', 'unpaved', 'polys')
 
     # TODO this isn't working to save, may not matter
-    if(!is.null(studyAreaName)){
-      terra::writeVector(terra::vect(disturbances2010), file.path(dataPath, paste0(studyAreaName, '_2010.shp')))
-      terra::writeVector(terra::vect(disturbances2015), file.path(dataPath, paste0(studyAreaName, '_2015.shp')))
-      terra::writeVector(terra::vect(disturbances2020), file.path(dataPath, paste0(studyAreaName, '_2020.shp')))
-
-    }
-    disturbances <- list(intYear2010 = disturbances2010, intYear2015 = disturbances2015, intYear2020 = disturbances2020)
-
+    # if(!is.null(studyAreaName)){
+    #   terra::writeVector(terra::vect(disturbances2010), file.path(dataPath, paste0(studyAreaName, '_2010.shp')))
+    #   terra::writeVector(terra::vect(disturbances2015), file.path(dataPath, paste0(studyAreaName, '_2015.shp')))
+    #   terra::writeVector(terra::vect(disturbances2020), file.path(dataPath, paste0(studyAreaName, '_2020.shp')))
+    # 
+    # }
+    disturbances <- list(intYear2010 = disturbances2010, 
+                         intYear2015 = disturbances2015, 
+                         intYear2020 = disturbances2020)
     return(disturbances)
   }
-
 }

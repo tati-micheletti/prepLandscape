@@ -4,7 +4,7 @@
 #'
 make_landforest_prop <- function(targetFile, trast, buff, where2save = NULL){
 
-  landRaw <- terra::rast(targetFile)
+    landRaw <- terra::rast(targetFile)
   land <- reproducible::postProcess(landRaw, cropTo=terra::buffer(trast, width = 10000))# |>
   # Cache()
   message('landscape cropped')
@@ -31,9 +31,6 @@ make_landforest_prop <- function(targetFile, trast, buff, where2save = NULL){
   gc()
   propLandFocal <- focal(propLand, Buff, na.rm = TRUE, pad = TRUE, padValue = 0)
   message('made moving window proportions')
-
-
-
 
   names(propLandFocal) <- c('prop_water', 'prop_snow', 'prop_rock', 'prop_barrenland', 'prop_bryoids',
                        'prop_shrub', 'prop_wetland', 'prop_wet_treed', 'prop_herbs',

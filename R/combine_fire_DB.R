@@ -2,7 +2,9 @@
 #' @export
 #' @author Julie W. Turner
 
-combine_fire_DB <- function(nbacURL, nfdbURL, dPath, studyArea, studyAreaName = NULL, savePath = NULL){
+combine_fire_DB <- function(nbacURL, nfdbURL, dPath, studyArea, 
+                            studyAreaName = NULL, 
+                            savePath = NUL, ...){
   
   nbac <- reproducible::prepInputs(url = nbacURL,
                                    destinationPath = dPath,
